@@ -1,0 +1,347 @@
+---
+title: 'Implementing Random Forest for regression in R from scratch.'
+output: html_document
+---
+
+Completing one task:
+
+1. Implementing random forest.
+
+#### **1. Task 1: Implementing Random Forest for regression in R from first principles. **
+- You should apply your random forest program to the Boston dataset to predict `medv`.
+- In other words, `medv` is **the label**, and the other 13 variables in the dataset are **the attributes**.
+- Split the dataset randomly into two equal parts, which will serve as **the training set** and **the test set**.
+- Use your birthday (in the format MMDD) as the seed for the pseudorandom number generator.
+- The same **training set and test set** should be used throughout this assignment. 
+
+**You need to complete the following parts:**
+
+a. Generate B = 100 bootstrapped training sets (BTS) from the training set.
+b. Use each BTS to train for a decision tree of height h = 3. 
+    - Be reminded that you are implementing random forest, 
+    - so at each node you do not consider all attributes, 
+    - but only a sample of them.
+c. Find the training MSE and test MSE. 
+    - Include it in your report.
+d. Repeat the above parts using different values of B and h. 
+    - In your report, plot the training MSE and test MSE as functions of B or/and h, and
+    - discuss your observations.
+    
+**1.1 Introduction**
+
+**Random forests or random decision forests** are an ensemble learning method for classification, regression and other tasks that operates by constructing a multitude of decision trees at training time. 
+
+For classification tasks, the output of the random forest is the class selected by most trees. 
+
+For regression tasks, the mean or average prediction of the individual trees is returned.
+
+Random decision forests correct for decision trees' habit of overfitting to their training set. Random forests generally outperform decision trees, but their accuracy is lower than gradient boosted trees. However, data characteristics can affect their performance.
+
+**1.2. Loading the Boston data set.**
+
+```{r}
+library(MASS)
+data(Boston)
+```
+
+```{r}
+any(is.na(Boston))
+```
+
+```{r}
+dim(Boston)
+```
+
+```{r}
+names(Boston)
+```
+
+```{r}
+head(Boston, 10)
+```
+
+**1.3. Splitting the Boston data set randomly into two equal parts.**
+
+```{r}
+## Splitting the Boston data set.
+attach(Boston)
+# October, 06.
+set.seed(1006) 
+# Splitting the Boston data set randomly into two equal parts.
+data.size <- floor(nrow(Boston)*0.5)
+new.data <- sample(1:nrow(Boston), size = data.size, replace=FALSE) 
+# The training set and the test set that will be used throughout this assignment.
+boston.train <- Boston[new.data,]
+boston.test <- Boston[-new.data,]
+```
+
+Separating the attributes and labels of the training set and the test set.
+
+```{r}
+train.X <- as.matrix(boston.train[-ncol(boston.train)])
+test.X <- as.matrix(boston.test[-ncol(boston.test)])
+train.Y <- as.matrix(boston.train$medv)
+test.Y <- as.matrix(boston.test$medv)
+```
+
+**1.4. Random forest build-in function in R **
+
+Applying random forest method to the Boston data set using the `randomForest` package in R.
+
+Applying random forest program to the Boston data set to predict `medv`.
+
+- `mtry` is the number of attributes sampled at each node.
+- vntree or B is the number of decision trees to be generated.
+
+For a regression problem with p attributes,
+
+- we sample p/3 attributes at each node 
+- (if p/3 is not an integer, round up).
+
+Sampling m=p/3 attributes at each node.
+
+```{r}
+#install.packages("randomForest")
+library(randomForest)
+p <- ncol(Boston)-1
+m <- ceiling(p/3)
+```
+
+**1.5. Building a random forest of regression tree.**
+
+```{r}
+rf <- randomForest(medv ~ .,data = boston.train, mtry=m, ntree=100, importance=TRUE)
+rf
+```
+
+```{r}
+plot(rf, col="red",main = "Random Forest Plot")
+```
+
+**1.6. Computing the test Mean squared error (MSE)**
+
+```{r}
+pred.medv <- predict(rf,test.X)
+pred.medv <- round(pred.medv,1)
+mse.test <- mean((pred.medv-test.Y)^2)
+print(mse.test)
+Result <- data.frame(test.Y, pred.medv)
+head(Result, 5)
+```
+
+**1.7. Computing the train Mean squared error (MSE).**
+
+```{r}
+yhat.medv <- predict(rf,train.X)
+yhat.medv <- round(yhat.medv, 1)
+mse.train <- mean((yhat.medv-train.Y)^2)
+print(mse.train)
+Result <- data.frame(train.Y, yhat.medv)
+head(Result, 5)
+```
+
+**1.8. Next, I want to see how the number of trees affect the test MSE.**
+
+Computing the test MSE when the numbers of trees are 10, 20, . . . , 500.
+
+```{r}
+test.MSE = c()
+for (i in 1:50){
+  rf.test.tree <- randomForest(medv~.,data=boston.train,mtry=m,ntree=i*10)
+  pred.medv.test <- predict(rf.test.tree,test.X)
+  print(paste("The test MSE when ntree = ", i*10, " is ", 
+              round(mean((pred.medv.test-test.Y)^2), 4),".", sep = ""))
+  
+  test.MSE <- c(test.MSE, round(mean((pred.medv.test-test.Y)^2), 4))
+}
+```
+
+We can see that the test MSE did not stabilizes. 
+
+**Plotting the test MSE against ntree.**
+
+```{r}
+# Plotting the test MSE against ntree.
+ntree.seq <- seq(10,500,10)
+plot(test.MSE,ntree.seq, ylab = "The number of trees",
+     xlab = "The test Mean Squared Error",
+     col = "red", 
+     main = "Plot of test MSE Vs ntree")
+```
+
+**1.9. Here, again, I want to see how the number of trees affect the train MSE.**
+
+Computing the train MSE when the numbers of trees are 10, 20, . . . , 500.
+
+```{r}
+train.MSE = c()
+for (i in 1:50){
+  rf.train <- randomForest(medv~.,data=boston.train,mtry=m,ntree=i*10)
+  pred.medv.train <- predict(rf.train,train.X)
+  print(paste("The train MSE when ntree = ", i*10 , " is ", 
+              round(mean((pred.medv.train-train.Y)^2), 4),".", sep = ""))
+  
+  train.MSE <- c(train.MSE , round(mean((pred.medv.train-train.Y)^2), 4))
+}
+```
+
+We can see that the train MSE stabilizes when ntree is over 80.
+
+**Plotting the train MSE against ntree.**
+
+```{r}
+plot(train.MSE,ntree.seq, ylab = "The number of trees",
+     xlab = "The test Mean Squared Error",
+     col = "red", 
+     main = "Plot of test MSE Vs ntree")
+```
+
+#### Task 1 (a).
+
+**Generating B = 100 bootstrapped training sets (BTS) from the training set.**
+
+```{r}
+BTS <- function(data) {
+    Samples <- sample(data,m, replace = TRUE)
+    print(head(Samples,5))
+}
+BTS(boston.train)
+```
+
+#### Task 1 (b).
+
+**Using each BTS to train for a decision tree of height h = 3.**
+
+```{r}
+setClass( "node", slots=list(is.leaf="logical", prediction="numeric", attr="character", 
+                             split="numeric", left.node="node", right.node="node"))
+
+prediction <- function(node,observation){
+  if (node@is.leaf){ 
+    return(node@prediction) }
+  if (observation[,node@attr] <= node@split){
+    return(prediction(node@left.node, observation))
+  } else {
+    return(prediction(node@right.node, observation))
+  }
+}
+
+# computing the average of all labels in data[indx]
+avg <- function(data,indx){
+  if (length(indx) == 0) {
+    return(0.0)}
+  d <- dim(data)[2]	
+  all_labels <- data[indx,d]
+  return(mean(all_labels))
+}
+
+# computing the RSS of the observations in data[indx]
+rss <- function(data,indx){
+  if (length(indx) == 0) { 
+    return(0.0)}
+  average <- avg(data,indx)
+  d <- dim(data)[2]
+  deviate <- data[indx,d] - average
+  return(sum(deviate ** 2.0) )
+}
+
+
+optimalSplit <- function(data,indx){
+  d <- dim(data)[2]
+  all_attributes <- names(data)[1:(d-1)]
+  opt_rss <- ((max(data[indx,d]) - min(data[indx,d])) ** 2.0 ) * length(indx) + 1.0
+  for (j in all_attributes){
+    # generate all possible split values
+    all_cuts <- data[indx,j]
+    all_cuts <- unique(all_cuts)
+    for (cut in all_cuts){
+      #determine which observations go to the left, and which else go to the right
+      Lindx <- c()
+      Rindx <- c()
+      for (i in indx){
+        if (data[i,j] <= cut){
+          Lindx <- append(Lindx,i)
+        }
+        else{
+          Rindx <- append(Rindx,i)
+        }
+      }
+      #compute the total RSS, and determine if is the best split so far
+      total_rss <- rss(data,Lindx) + rss(data,Rindx)
+      if (total_rss < opt_rss){
+        opt_rss <- total_rss
+        opt_split <- list(j,cut)
+      }
+    }
+  }
+  return(opt_split)
+}
+
+generate <- function(data,indx,depth){
+  node <- new("node")
+  d <- dim(data)[2]
+  if (depth == 0){
+    node@is.leaf <- TRUE
+    node@prediction <- avg(data,indx)
+  }else{
+    #extract all labels in data[indx], and check if they are all the same
+    #if they are all the same, no split is needed, "node" is a leaf, and the prediction value is same as the common value of all the labels
+    all_labels <- data[indx,d]
+    all_labels <- unique(all_labels)
+    if (length(all_labels) == 1){
+      node@is.leaf <- TRUE
+      node@prediction <- data[indx[1],d]
+    }else{
+      #in this case, "node" is internal, a split is needed, and we need to compute the optimal split
+      node@is.leaf <- FALSE
+      opt_split <- optimalSplit(data,indx)
+      node@attr <- opt_split[[1]]
+      node@split <- opt_split[[2]]
+      #after computing the optimal split, we split data into two parts, one going to the left child, and the other going to the right child
+      #we compute the indices of observations that go to left or right below
+      Lindx <- c()
+      Rindx <- c()
+      for (i in indx){
+        if (data[i,node@attr] <= node@split){
+          Lindx <- append(Lindx,i)
+        }
+        else{
+          Rindx <- append(Rindx,i)
+        }
+      }
+      #then we create two new nodes, which are the left child and the right child of "node"
+      #after this, we recursively call the function "generate" on the two children, to create one sub-tree under each child
+      Lnode <- generate(data,Lindx,depth-1)
+      Rnode <- generate(data,Rindx,depth-1)
+      node@left.node <- Lnode
+      node@right.node <- Rnode
+    }
+  }
+  return(node)
+}
+```
+
+```{r}
+new.data.BTS <- BTS(boston.train)
+root <- generate(new.data.BTS ,1:(dim(new.data.BTS )[1]),3)
+root
+```
+
+
+##### Task 1 (d). 
+
+**Repeat the above parts using different values of B and h.**
+
+```{r}
+new.data.BTS.1 <- BTS(boston.train)
+root.1 <- generate(new.data.BTS.1 ,1:(dim(new.data.BTS.1)[1]),5)
+root.1
+```
+
+##### **References**
+
+1. <https://en.wikipedia.org/wiki/Random_forest>
+
+----
+
+----
